@@ -18,15 +18,22 @@ last_name_column = 'patient_last_name'
 patient_id_column = 'patient_id'
 
 def anonymize_patients_data(patients_data):
-    patients_data[ssn_column] = 'XXX-XX-XXXX'
-    patients_data[first_name_column] = patients_data[first_name_column].apply(lambda _: names.get_first_name())
-    patients_data[last_name_column] = patients_data[last_name_column].apply(lambda _: names.get_last_name())
+    if ssn_column in patients_data.columns:
+        patients_data[ssn_column] = 'XXX-XX-XXXX'
+    if first_name_column in patients_data.columns:
+        patients_data[first_name_column] = patients_data[first_name_column].apply(lambda _: names.get_first_name())
+    if last_name_column in patients_data.columns:
+        patients_data[last_name_column] = patients_data[last_name_column].apply(lambda _: names.get_last_name())
     return patients_data
 
 def anonymize_other_table(other_table, patient_id_column, anonymized_patients_data):
+    if patient_id_column not in other_table.columns:
+        return other_table
+
     merged_data = other_table.merge(anonymized_patients_data[[patient_id_column, ssn_column, first_name_column, last_name_column]], on=patient_id_column, how='left')
     for column in [ssn_column, first_name_column, last_name_column]:
-        other_table.loc[merged_data[column].notnull(), column] = merged_data[column]
+        if column in other_table.columns:
+            other_table.loc[merged_data[column].notnull(), column] = merged_data[column]
     return other_table
 
 input_folder = 'input_csv_folder'
