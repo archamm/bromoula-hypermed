@@ -18,7 +18,7 @@ for ligne in tqdm(lignes):
     ligne_name_pre_anonymise = re.sub(r'(?<=NomPrenom;)[^\t]+',  str(numero).zfill(8), ligne_name_anonymise)
     ligne_anonymise = re.sub(r'(?<=NomVitale;)[^\t]+',  str(numero).zfill(8), ligne_name_pre_anonymise)
     if "QuickSearch;" in ligne:
-       ligne_anonymise = re.sub(r'(?<=NomVitale;)[^\t]+',  str(numero).zfill(8), ligne_anonymise)
+       ligne_anonymise = re.sub(r'(?<=QuickSearch;)[^\t]+',  str(numero).zfill(8), ligne_anonymise)
     nouveau_contenu += ligne_anonymise + '\n'
     numero += 1
   elif "NomPreAss;" in ligne:
