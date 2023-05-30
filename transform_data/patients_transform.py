@@ -133,19 +133,19 @@ print(merged_df.head())
 filtered_df = merged_df[column_mapping.keys()]
 
 # Rename the columns to match the destination schema
-renamed_df = filtered_df.rename(columns=column_mapping)
+renamed_consultation_df = filtered_df.rename(columns=column_mapping)
 
 # Add missing columns
 missing_columns = ['illness_observation', 'conclusion']
 for col in missing_columns:
-    renamed_df[col] = ""
+    renamed_consultation_df[col] = ""
 
 # Use 'Titre' as 'conclusion' as well
-renamed_df['conclusion'] = renamed_df['reason']
-renamed_df['finished_at'] = renamed_df['started_at']
+renamed_consultation_df['conclusion'] = renamed_consultation_df['reason']
+renamed_consultation_df['finished_at'] = renamed_consultation_df['started_at']
 
 # Save the filtered and renamed dataframe to a .csv file
-renamed_df.to_csv('extracts/consultations.csv', index=False, header=True, escapechar="\\")
+renamed_consultation_df.to_csv('extracts/consultations.csv', index=False, header=True, escapechar="\\")
 
 pat_vac_data = parse_data('data/PAT_Vaccins.txt')
 per_vac_data = parse_data('data/PER_Vaccins.txt')
@@ -309,3 +309,76 @@ observations_df = observations_df.drop(observations_df[observations_df['value'] 
 
 # Saving to CSV
 observations_df.to_csv('extracts/patient_observations.csv', index=False, header=True)
+
+# Parse the data
+prescription_data = parse_data('data/PAT_OrdCons.txt')
+
+# Convert list of dictionaries to pandas DataFrame
+prescription_df = pd.DataFrame(prescription_data)
+
+# Add patient_first_name and patient_last_name from patients_df
+prescription_df = pd.merge(prescription_df, renamed_consultation_df[['import_identifier', 'patient_import_identifier', 'patient_first_name', 'patient_last_name']], left_on='NumCons', right_on='import_identifier')
+
+# Define mapping between original column names and new names
+column_mapping_prescription = {
+    'NumCons': 'consultation_import_identifier',
+    'patient_import_identifier': 'patient_import_identifier',
+    'patient_last_name': 'patient_last_name',
+    'patient_first_name': 'patient_first_name',
+    'DateCons': 'created_at',
+    'NomProduit': 'medication',
+    'Poso': 'posology',
+    'DateFinProd': 'end_date',
+}
+
+# Select only required columns from dataframe
+filtered_df_prescription = prescription_df[column_mapping_prescription.keys()]
+
+# Rename the columns to match the destination schema
+renamed_df_prescription = filtered_df_prescription.rename(columns=column_mapping_prescription)
+
+
+
+# Define a default start date based on the 'created_at' column
+renamed_df_prescription['start_date'] = renamed_df_prescription['created_at']
+renamed_df_prescription['updated_at'] = renamed_df_prescription['created_at']
+renamed_df_prescription['import_identifier']= renamed_df_prescription.index
+
+column_prescription_order = ['import_identifier', 'consultation_import_identifier', 'patient_import_identifier',
+                'patient_first_name', 'patient_last_name', 'created_at', 'updated_at']
+
+# Save the filtered and renamed dataframe to a .csv file
+renamed_df_prescription[column_prescription_order].to_csv('extracts/prescriptions.csv', index=False, header=True)
+
+# Now let's create the DataFrame for the treatments
+
+# Define mapping between original column names and new names for the treatments
+column_mapping_treatment = {
+    'patient_import_identifier': 'patient_import_identifier',
+    'patient_last_name': 'patient_last_name',
+    'patient_first_name': 'patient_first_name',
+    'DateCons': 'start_date',
+    'DateFinProd': 'end_date',
+    'NomProduit': 'medication',
+    'Poso': 'posology',
+}
+
+# Select only required columns from dataframe
+filtered_df_treatment = prescription_df[column_mapping_treatment.keys()]
+
+# Rename the columns to match the destination schema
+renamed_df_treatment = filtered_df_treatment.rename(columns=column_mapping_treatment)
+
+# Add missing columns
+renamed_df_treatment['import_identifier']= renamed_df_treatment.index
+renamed_df_treatment['prescription_import_identifier']= renamed_df_treatment.index
+missing_columns_treatment = ['long_term_condition', 'long_term_treatment', 'raw_code', 'rank']
+for col in missing_columns_treatment:
+    renamed_df_treatment[col] = ""
+
+# Save the filtered and renamed dataframe to a .csv file
+column_treatment_order = ['import_identifier', 'prescription_import_identifier', 'patient_import_identifier',
+                'patient_first_name', 'patient_last_name', 'start_date', 'end_date', 'medication',
+                'posology', 'long_term_condition', 'long_term_treatment', 'rank', 'raw_code']
+
+renamed_df_treatment[column_treatment_order].to_csv('extracts/treatments.csv', index=False, header=True)
