@@ -1,3 +1,5 @@
 venv/
 build/
 /transform_data/data
+tests/
+extract_anonym/
