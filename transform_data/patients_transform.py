@@ -444,7 +444,7 @@ renamed_df_documents['generated_during_import'] = False
 renamed_df_documents['file_kit_tanker_uploaded'] = 0
 
 
-courrier_df = pd.read_csv('courrier.csv', sep=',')
+courrier_df = pd.read_csv('courrier.csv', sep=',', dtype=str)
 columns_to_drop = ['import_identifier', 'patient_import_identifier', 'patient_first_name', 'patient_last_name']
 courrier_df = courrier_df.drop(columns=columns_to_drop, errors='ignore')
 
