@@ -356,6 +356,7 @@ column_mapping_prescription = {
     'Poso': 'posology',
     'DateFinProd': 'end_date',
 }
+prescription_df = prescription_df.dropna(subset=['NomProduit'])
 
 # Select only required columns from dataframe
 filtered_df_prescription = prescription_df[column_mapping_prescription.keys()]
