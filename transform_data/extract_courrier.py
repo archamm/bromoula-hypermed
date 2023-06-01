@@ -11,7 +11,7 @@ from reportlab.pdfgen import canvas
 
 columns_document_df = ['import_identifier', 'patient_import_identifier', 'patient_first_name', 'patient_last_name', 'practitioner_adeli_id',
                'practitioner_rpps_id', 'practitioner_code', 'consultation_import_identifier', 'care_plan_import_identifier', 'originally_created_on',
-                 'filename', 'title', 'kind', 'other_key', 'file_kit_tanker_uploaded', 'size', 'extension']
+                 'filename', 'title', 'kind', 'key', 'file_kit_tanker_uploaded', 'size', 'extension']
 
 
 def extract_infos(balise1, balise2, data):
@@ -40,7 +40,7 @@ def generate_courrier_csv(data):
                    'filename': filename_list,
                    'title': TitreCour_list,
                    'kind': None_list,
-                   'other_key': None_list,
+                   'key': None_list,
                    'file_kit_tanker_uploaded': None_list,
                    'size': None_list,
                    'extension': None_list
