@@ -1,6 +1,21 @@
 import os
 import re
 
+def remove_newlines_except_before(input_filepath, output_filepath, target_string):
+    pattern = r'\n(?!(?:.*' + re.escape(target_string) + '))'
+
+    with open(input_filepath, 'r') as input_file:
+        input_text = input_file.read()
+
+    output_text = re.sub(pattern, '', input_text)
+
+    with open(output_filepath, 'w') as output_file:
+        output_file.write(output_text)
+
+    print("Newlines removed and saved to", output_filepath)
+
+
+
 # Prepare the output directory.
 output_dir = "data"
 os.makedirs(output_dir, exist_ok=True)
@@ -41,3 +56,15 @@ with open(filename, 'r') as file:
 if output_file is not None:
     output_file.close()
 
+
+input_file = 'data/PAT_Criteres.txt'
+output_file = 'data/PAT_Criteres_2.txt'
+target = 'NumCons;'
+
+remove_newlines_except_before(input_file, output_file, target)
+
+input_file = 'data/MAQ_Criteres.txt'
+output_file = 'data/MAQ_Criteres_2.txt'
+target = 'CodeCrit;'
+
+remove_newlines_except_before(input_file, output_file, target)
