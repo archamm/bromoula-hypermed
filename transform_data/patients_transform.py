@@ -1,13 +1,31 @@
 import pandas as pd
 import re
 import logging
-
+import numpy as np
 # Configure logging to write logs to a file
 logging.basicConfig(filename='hypermed_to_docto_generation.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 regex_pattern_text_cons = r'TextCons_;(.*?)\tUUID;'
 regex_pattern_num_cons = r'NumCons;(.*?)\tTextCons_;'
 
+
+
+def parse_codeCrit(filepath):
+    data = []  # Initialize an empty list to hold our data
+
+    with open(filepath, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+        for line in lines:
+            if line.startswith('CodeCrit'):
+                segments = line.split('\t')
+                code_crit = segments[0].split(';')[1]
+                nom_crit = segments[2].split(';')[1]
+                data.append((code_crit, nom_crit))
+
+    # Create a pandas DataFrame from the data
+    df = pd.DataFrame(data, columns=['CodeCrit', 'NomCrit'])
+
+    return df
 
 # Custom function to update the 'end_date' column
 def update_end_date(row):
@@ -119,14 +137,13 @@ renamed_df = renamed_df.dropna(subset=['import_identifier'])
 
 # Save the filtered and renamed dataframe to a .csv file
 renamed_df.to_csv('extracts/patients.csv', index=False, header=True)
-csv_logger.info(f"Generated patients.csv")
+csv_logger.info(f"Generated patients.csv, {len(renamed_df)} lines")
 
 # Parse the data
 consult_data = parse_data('data/PAT_Consult.txt')
 
 # Convert list of dictionaries to pandas DataFrame
 consult_df = pd.DataFrame(consult_data)
-print(len(consult_df))
 text_cons_df = get_df_from_textcons()
 csv_logger.info(f"Loaded data from PAT_Consult.txt and PAT_TextCons.txt")
 
@@ -165,9 +182,8 @@ renamed_consultation_df['finished_at'] = renamed_consultation_df['started_at']
 renamed_consultation_df = renamed_consultation_df.drop_duplicates()
 renamed_consultation_df = renamed_consultation_df.dropna(subset=['import_identifier'])
 
-print(len(renamed_consultation_df))
 renamed_consultation_df.to_csv('extracts/consultations.csv', index=False, header=True, escapechar="\\")
-csv_logger.info(f"Generated consultations.csv")
+csv_logger.info(f"Generated consultations.csv, {len(renamed_consultation_df)} lines")
 
 pat_vac_data = parse_data('data/PAT_Vaccins.txt')
 per_vac_data = parse_data('data/PER_Vaccins.txt')
@@ -231,7 +247,7 @@ renamed_df = renamed_df.filter(items=schema)
 
 
 renamed_df.to_csv('extracts/vaccine_injections.csv', index=False, header=True)
-csv_logger.info(f"Generated vaccines.csv")
+csv_logger.info(f"Generated vaccines.csv, {len(renamed_df)} lines")
 
 
 # Parse the data
@@ -274,54 +290,50 @@ renamed_df['import_identifier'] =  renamed_df.index
 renamed_df = renamed_df.dropna(subset=['patient_import_identifier'])
 renamed_df = renamed_df.dropna(subset=['title'])
 
+
+
 renamed_df.to_csv('extracts/medical_history_lines.csv', index=False, header=True)
-csv_logger.info(f"Generated medical_history_lines.csv")
+csv_logger.info(f"Generated medical_history_lines.csv, {len(renamed_df)} lines")
 
- 
-# Filtering out the rows where both 'Poids' and 'Taille' are not equal to 0
-filtered_patient_df = patients_df[(patients_df['Poids'] != 0) | (patients_df['Taille'] != 0)]
 
-# Creating two separate DataFrames for 'Poids' and 'Taille'
-df_poids = filtered_patient_df[filtered_patient_df['Poids'] != "0"][['ID', 'Nom', 'Prenom', 'DateCreat', 'Poids']]
-df_taille = filtered_patient_df[filtered_patient_df['Taille'] != "0"][['ID', 'Nom', 'Prenom', 'DateCreat', 'Taille']]
 
-# Adding new columns to both DataFrames
-df_poids['display_name'] = 'Poids du patient'
-df_poids['measurement_unit'] = 'kg'
-df_poids['code'] = ''
-df_poids['value'] = df_poids['Poids']
+codecrit_data = parse_data('data/MAQ_Criteres_2.txt')
+observations_data = parse_data('data/PAT_Criteres_2.txt')
 
-df_taille['display_name'] = 'Taille du patient'
-df_taille['measurement_unit'] = 'cm'  # Assuming the unit here
-df_taille['code'] = ''  # Replace with actual code
-df_taille['value'] = df_taille['Taille']
+codecrit_df = pd.DataFrame(codecrit_data)
+observations_df = pd.DataFrame(observations_data)
 
-# Combining the two DataFrames
-observations_df = pd.concat([df_poids, df_taille])
-observations_df['consultation_import_identifier'] = ''
-# Renaming the columns
-observations_df.rename(columns={'ID': 'patient_import_identifier', 
-                         'Nom': 'patient_last_name', 
-                         'Prenom': 'patient_first_name', 
-                         'DateCreat': 'recorded_at'}, inplace=True)
+observations_df = pd.merge(observations_df, codecrit_df, how='left', on='CodeCrit')
 
-# Rearranging the columns to match your desired format
-observations_df = observations_df[['consultation_import_identifier',
-                     'patient_import_identifier', 
-                     'patient_first_name', 
-                     'patient_last_name', 
-                     'value', 
-                     'recorded_at', 
-                     'measurement_unit', 
-                     'code', 
-                     'display_name']]
-observations_df = observations_df.drop(observations_df[observations_df['value'] == "0"].index)
-observations_df = observations_df.dropna(subset=['patient_import_identifier'])
-observations_df = observations_df.dropna(subset=['value'])
 
-# Saving to CSV
-observations_df.to_csv('extracts/patient_observations.csv', index=False, header=True)
-csv_logger.info(f"Generated patient_observations.csv")
+
+observations_df = pd.merge(observations_df, renamed_consultation_df[['import_identifier', 'patient_import_identifier', 'patient_first_name', 'patient_last_name', 'started_at']], left_on='NumCons', right_on='import_identifier')
+
+column_mapping_observation = {
+    'NumCons': 'consultation_import_identifier',
+    'patient_import_identifier': 'patient_import_identifier',
+    'patient_last_name': 'patient_last_name',
+    'patient_first_name': 'patient_first_name',
+    'ValText': 'value',
+    'started_at': 'recorded_at',
+    'NomCrit': 'display_name',
+}
+# Select only required columns from dataframe
+filtered_observations_df = observations_df[column_mapping_observation.keys()]
+
+# Rename the columns to match the destination schema
+renamed_observations_df = filtered_observations_df.rename(columns=column_mapping_observation)
+
+missing_columns_treatment = ['measurement_unit', 'code']
+for col in missing_columns_treatment:
+    renamed_observations_df[col] = ""
+
+
+renamed_observations_df.dropna(subset=['value'])
+
+renamed_observations_df.to_csv('extracts/patient_observations.csv', index=False, header=True)
+csv_logger.info(f"Generated patient_observations.csv, {len(renamed_consultation_df)} lines")
+
 
 # Parse the data
 prescription_data = parse_data('data/PAT_OrdCons.txt')
@@ -365,7 +377,7 @@ renamed_df_prescription = renamed_df_prescription.dropna(subset=['created_at'])
 
 # Save the filtered and renamed dataframe to a .csv file
 renamed_df_prescription[column_prescription_order].to_csv('extracts/prescriptions.csv', index=False, header=True)
-csv_logger.info(f"Generated prescriptions.csv")
+csv_logger.info(f"Generated prescriptions.csv, {len(renamed_df_prescription)} lines")
 
 # Now let's create the DataFrame for the treatments
 
@@ -403,7 +415,7 @@ column_treatment_order = ['import_identifier', 'prescription_import_identifier',
                 'posology', 'long_term_condition', 'long_term_treatment', 'rank', 'raw_code']
 
 renamed_df_treatment[column_treatment_order].to_csv('extracts/treatments.csv', index=False, header=True)
-csv_logger.info(f"Generated treatments.csv")
+csv_logger.info(f"Generated treatments.csv, {len(renamed_df_treatment)} lines")
 
 documents_data = parse_data('data/PAT_PICTQUICK.txt')
 
@@ -415,7 +427,7 @@ column_mapping_documents = {
     'NumCons': 'consultation_import_identifier',
     'Creat_Date': 'originally_created_on',
     'NomFichier': 'filename',
-    'Titre': 'Titre',
+    'Titre': 'title',
 }
 
 # Select only required columns from dataframe
@@ -431,25 +443,16 @@ for col in missing_columns:
 renamed_df_documents['generated_during_import'] = False
 renamed_df_documents['file_kit_tanker_uploaded'] = 0
 
+
 courrier_df = pd.read_csv('courrier.csv', sep=',')
-renamed_df_documents = pd.concat([courrier_df[
-    ["practitioner_adeli_id",
-    "practitioner_rpps_id",
-    "practitioner_code",
-    "consultation_import_identifier",
-    "care_plan_import_identifier",
-    "originally_created_on",
-    "filename",
-    "title",
-    "kind",
-    "other_key",
-    "file_kit_tanker_uploaded",
-    "size",
-    "extension"]
-], renamed_df_documents])
+columns_to_drop = ['import_identifier', 'patient_import_identifier', 'patient_first_name', 'patient_last_name']
+courrier_df = courrier_df.drop(columns=columns_to_drop, errors='ignore')
+
+renamed_df_documents = pd.concat([courrier_df, renamed_df_documents], ignore_index=True)
 
 # Add patient_first_name and patient_last_name from renamed_consultation_df
-renamed_df_documents = pd.merge(renamed_df_documents, renamed_consultation_df[['import_identifier', 'patient_import_identifier', 'patient_first_name', 'patient_last_name']], left_on='consultation_import_identifier', right_on='import_identifier')
+renamed_df_documents = pd.merge(renamed_df_documents, renamed_consultation_df[['import_identifier', 'patient_import_identifier', 'patient_first_name', 'patient_last_name']], left_on='consultation_import_identifier', right_on='import_identifier', how='left')
+
 renamed_df_documents['import_identifier'] = renamed_df_documents.index
 
 column_documents_order = [
@@ -466,13 +469,17 @@ column_documents_order = [
     "filename",
     "title",
     "kind",
-    "other_key",
+    "key",
     "file_kit_tanker_uploaded",
     "size",
     "extension"
 ]
+
+renamed_df_documents['generated_during_import'] = False
+renamed_df_documents['file_kit_tanker_uploaded'] = 0
+
 renamed_df_documents[column_documents_order].to_csv('extracts/documents.csv', index=False, header=True)
-csv_logger.info(f"Generated documents.csv")
+csv_logger.info(f"Generated documents.csv, {len(renamed_df_documents)} lines")
 
 pd.DataFrame(columns=['patient_import_identifier', 'patient_first_name', 'patient_last_name', 'content']).to_csv('extracts/patient_memos.csv', index=False)
-csv_logger.info(f"Generated patient_memos.csv")
+csv_logger.info(f"Generated patient_memos.csv 0 lines")
