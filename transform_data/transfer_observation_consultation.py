@@ -1,99 +1,74 @@
 import pandas as pd
-import multiprocessing
-from tqdm import tqdm
-import numpy as np
-import itertools
+import swifter
 
 observation_to_consultations = {
     "Motif ": "reason",
     "Examen": "illness_observation",
     "Commentaires": None,
-    "Plainte nouvelle" : "reason",
-    "Etat dossier" : None,
-    "Diagnostic probable" : "conclusion",
-    "Commentaire": "conclusion"
+    "Plainte nouvelle": "reason",
+    "Etat dossier": None,
+    "Diagnostic probable": "conclusion",
+    "Commentaire": "conclusion",
 }
 
-def process_row(row, observation_to_consultations, renamed_consultation_df):
+
+def process_row(row):
     """
-    Traitement pour une seule ligne de données.
-    
-    Args:
-        row (pandas.Series): Ligne de données à traiter.
-        observation_to_consultations (dict): Dictionnaire contenant les correspondances entre les valeurs de 'display_name' et les noms de colonnes dans 'renamed_consultation_df'.
-        renamed_consultation_df (pandas.DataFrame): DataFrame contenant les données de consultation.
-    
-    Returns:
-        list: Liste des indices de lignes à supprimer.
+    Permet de à partir des champs display_name et value d'observations de remplir les champs
+    reason,medical_assessment,illness_observation,conclusion de consultations
     """
-    rows_to_delete = []
-    display_name = row['display_name']
-    value = row['value']
-    consultation_import_identifier = row['consultation_import_identifier']
-    if display_name in observation_to_consultations and value and str(value).strip() and pd.notnull(value) and observation_to_consultations[display_name]:
-        column_name = observation_to_consultations[display_name]
-        existing_value = renamed_consultation_df.loc[renamed_consultation_df['import_identifier'] == consultation_import_identifier, column_name].values[0]
-        if pd.notnull(existing_value):
-            value = existing_value + '\n' + value
-        renamed_consultation_df.loc[renamed_consultation_df['import_identifier'] == consultation_import_identifier, column_name] = value
-        rows_to_delete.append(row.name)
-    return rows_to_delete
-
-def process_chunk(chunk, observation_to_consultations, renamed_consultation_df):
-    """
-    Traitement pour un chunk de données.
-    
-    Args:
-        chunk (pandas.DataFrame): Chunk de données à traiter.
-        observation_to_consultations (dict): Dictionnaire contenant les correspondances entre les valeurs de 'display_name' et les noms de colonnes dans 'renamed_consultation_df'.
-        renamed_consultation_df (pandas.DataFrame): DataFrame contenant les données de consultation.
-    
-    Returns:
-        list: Liste des indices de lignes à supprimer.
-    """
-
-    rows_to_delete = chunk.apply(process_row, axis=1, args=(observation_to_consultations, renamed_consultation_df))
-    rows_to_delete = list(itertools.chain(*rows_to_delete))  # Aplatir la liste
-    return rows_to_delete
+    display_names = row["display_name"]
+    values = row["value"]
+    if isinstance(display_names, list):
+        for index, name in enumerate(display_names):
+            if observation_to_consultations[name]:
+                column_name = observation_to_consultations[name]
+                existing_value = row[column_name]
+                if pd.notnull(existing_value) and str(values[index]) != existing_value:
+                    row[column_name] = existing_value + "\n" + str(values[index])
+                else:
+                    row[column_name] = values[index]
+    return row
 
 
-def add_values_to_dataframe(observation_to_consultations, renamed_observations_df, renamed_consultation_df):
-    """
-    Cette méthode lit les lignes de la DataFrame 'renamed_observations_df' et extrait les valeurs correspondantes
-    en fonction des clés du dictionnaire. Ces valeurs sont ensuite ajoutées avec un retour à la ligne dans les
-    champs correspondants de la DataFrame 'renamed_consultation_df'. De plus, si une clé du dictionnaire est présente
-    dans le champ 'display_name' de 'renamed_observations_df', la ligne correspondante est supprimée de la DataFrame.
-    
-    Args:
-        renamed_observations_df (pandas.DataFrame): DataFrame contenant les valeurs à extraire.
-        renamed_consultation_df (pandas.DataFrame): DataFrame où les valeurs extraites seront ajoutées.
-    
-    Returns:
-        pandas.DataFrame: renamed_consultation_df et renamed_observations_df
-    """
-    chunks = np.array_split(renamed_observations_df, multiprocessing.cpu_count())  # Diviser les données en chunks
-    pool = multiprocessing.Pool()
-    results = []
-    with tqdm(total=len(chunks)) as pbar:
-        for chunk in chunks:
-            result = pool.apply_async(process_chunk, args=(chunk, observation_to_consultations, renamed_consultation_df))
-            result.get()
-            results.append(result)
-            pbar.update(1)
-    pool.close()
-    pool.join()
-    rows_to_delete = [result.get() for result in results]
-    rows_to_delete = list(itertools.chain(*rows_to_delete))  # Aplatir la liste
-    renamed_observations_df = renamed_observations_df.drop(rows_to_delete)
-    return renamed_consultation_df, renamed_observations_df
+def run(renamed_observations_df, renamed_consultation_df):
+    # Créer une liste des clés du dictionnaire observation_to_consultations
+    keys_to_consult = list(observation_to_consultations.keys())
+
+    # Filtrer la dataframe en utilisant la méthode isin()
+    filtered_observations_df = renamed_observations_df[
+        renamed_observations_df["display_name"].isin(keys_to_consult)
+    ]
+    filtered_columns_observations_df = filtered_observations_df[
+        ["consultation_import_identifier", "display_name", "value"]
+    ]
+    grouped_observations_df = (
+        filtered_columns_observations_df.groupby("consultation_import_identifier")
+        .agg({"display_name": list, "value": list})
+        .reset_index()
+    )
+    merged_df = pd.merge(
+        renamed_consultation_df,
+        grouped_observations_df,
+        left_on="import_identifier",
+        right_on="consultation_import_identifier",
+        how="left",
+    )
+    merged_df = merged_df.swifter.apply(process_row, axis=1)
+    # on génére les 2 dataframes observations et consultations finales
+    observation_clean_df = renamed_observations_df[
+        ~renamed_observations_df["display_name"].isin(keys_to_consult)
+    ]
+    # on supprime les 2 colonnes qui venaient d'observation
+    merged_df.drop(columns=["value", "display_name"], inplace=True)
+    return observation_clean_df, merged_df
 
 
-def main():
-    renamed_observations_df = pd.read_csv('extracts/patient_observations test.csv')
-    renamed_consultation_df = pd.read_csv('extracts/consultations test.csv')
-
-    renamed_consultation_df, renamed_observations_df = add_values_to_dataframe(observation_to_consultations, renamed_observations_df, renamed_consultation_df)
-
-if __name__ == '__main__':
-    multiprocessing.freeze_support()
-    main()
+if __name__ == "__main__":
+    renamed_observations_df = pd.read_csv("extracts/patient_observationscsv")
+    renamed_consultation_df = pd.read_csv("extracts/consultations.csv")
+    observation_clean_df, consultations_ettofed_df = run(
+        renamed_observations_df, renamed_consultation_df
+    )
+    observation_clean_df.to_csv("observation_clean.csv", index=False)
+    consultations_ettofed_df.to_csv("consultation_etoffed.csv", index=False)
