@@ -9,6 +9,8 @@ observation_to_consultations = {
     "Etat dossier": None,
     "Diagnostic probable": "conclusion",
     "Commentaire": "conclusion",
+    "Motif administratif": "reason",
+    "Etat prélèvement": None,
 }
 
 
