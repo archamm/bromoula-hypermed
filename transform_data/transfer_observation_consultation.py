@@ -24,7 +24,11 @@ def process_row(row):
             if observation_to_consultations[name]:
                 column_name = observation_to_consultations[name]
                 existing_value = row[column_name]
-                if pd.notnull(existing_value) and str(values[index]) != existing_value:
+                if (
+                    pd.notnull(existing_value)
+                    and existing_value
+                    and str(values[index]) != existing_value
+                ):
                     row[column_name] = existing_value + "\n" + str(values[index])
                 else:
                     row[column_name] = values[index]
@@ -60,7 +64,10 @@ def run(renamed_observations_df, renamed_consultation_df):
         ~renamed_observations_df["display_name"].isin(keys_to_consult)
     ]
     # on supprime les 2 colonnes qui venaient d'observation
-    merged_df.drop(columns=["value", "display_name"], inplace=True)
+    merged_df.drop(
+        columns=["value", "display_name", "consultation_import_identifier"],
+        inplace=True,
+    )
     return observation_clean_df, merged_df
 
 
