@@ -2,6 +2,7 @@ import pandas as pd
 import re
 import logging
 import numpy as np
+import os
 import transfer_observation_consultation
 
 # Configure logging to write logs to a file
@@ -144,6 +145,10 @@ missing_columns = ["phone2", "phone3", "phone4"]
 for col in missing_columns:
     renamed_df[col] = ""
 renamed_df = renamed_df.dropna(subset=["import_identifier"])
+
+# Create the output folder if it doesn't exist
+if not os.path.exists("extracts"):
+    os.makedirs("extracts")
 
 # Save the filtered and renamed dataframe to a .csv file
 renamed_df.to_csv("extracts/patients.csv", index=False, header=True)
