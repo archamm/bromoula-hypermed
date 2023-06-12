@@ -617,3 +617,13 @@ pd.DataFrame(
     ]
 ).to_csv("extracts/patient_memos.csv", index=False)
 csv_logger.info(f"Generated patient_memos.csv 0 lines")
+
+extracts_folder = 'extracts'
+
+for filename in os.listdir(extracts_folder):
+    
+    if filename.endswith('.csv'):
+        filepath = os.path.join(extracts_folder, filename)
+        df = pd.read_csv(filepath, dtype=str)
+        output_filepath = os.path.join(extracts_folder, filename)
+        df.to_csv(output_filepath, index=False)
